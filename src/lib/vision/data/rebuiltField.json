@@ -1,0 +1,19 @@
+{
+  "game": "REBUILT",
+  "season": 2026,
+  "units": "meters",
+  "frame": "WPILib blue-origin: x runs from the blue alliance wall (0) to the red wall, y runs left as seen from the blue driver station, heading 0 is +x and turns counter-clockwise.",
+  "source": "Field and robot dimensions from the 2026 Game Manual (frcmanual.com/2026/arena). Hub, tower and outpost centres from the official AprilTag layout (wpilibsuite/allwpilib 2026-rebuilt-welded). Bump, trench and outpost extents are derived from manual dimensions and are approximate.",
+  "length": 16.541,
+  "width": 8.07,
+  "autoSeconds": 20,
+  "autoScoringGraceSeconds": 3,
+  "startLineX": 4.028,
+  "hub": { "x": 4.625, "y": 4.035, "halfSize": 0.597, "openingHeight": 1.829 },
+  "tower": { "x0": 0, "x1": 1.143, "y0": 3.336, "y1": 4.587 },
+  "outpost": { "x0": 0, "x1": 0.9, "y0": 0.15, "y1": 1.6, "approximate": true },
+  "bump": { "x0": 4.061, "x1": 5.189, "yInner": 0.597, "yOuter": 2.452, "approximate": true },
+  "trench": { "x0": 4.028, "x1": 5.222, "yOuter": 2.452, "approximate": true },
+  "robot": { "maxSizeIn": 29, "typicalTopSpeedMps": 5.0, "maxPlausibleSpeedMps": 6.5 },
+  "startPositions": ["left trench", "left mound", "center", "right mound", "right trench"]
+}

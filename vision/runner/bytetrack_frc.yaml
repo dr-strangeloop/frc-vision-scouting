@@ -1,0 +1,8 @@
+# Deployed Chezy baseline profile; retained for comparable accuracy reruns.
+tracker_type: bytetrack
+track_high_thresh: 0.35
+track_low_thresh: 0.15
+new_track_thresh: 0.45
+track_buffer: 180
+match_thresh: 0.85
+fuse_score: true

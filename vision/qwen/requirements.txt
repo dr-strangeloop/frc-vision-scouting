@@ -1,0 +1,5 @@
+transformers>=4.57,<5
+accelerate>=1.10,<2
+fastapi>=0.116,<1
+uvicorn[standard]>=0.35,<1
+Pillow>=11,<13
