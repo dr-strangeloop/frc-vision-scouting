@@ -64,6 +64,10 @@ The roster comes from The Blue Alliance (`TBA_API_KEY`) or `--roster-json`. Run 
 - Broadcast layouts differ by event (split screens, close-up panes); calibrate each venue's wide view, and expect to
   adjust region-of-interest settings for a new broadcast.
 
+## Changelog
+
+Every release, newest first: [CHANGELOG.md](CHANGELOG.md). This code is release 1.21.1 (`vision/VERSION`).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
