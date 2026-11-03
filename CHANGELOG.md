@@ -4,7 +4,8 @@ Each release of the vision pipeline, newest first. Versions follow `MAJOR.MINOR.
 feature or noticeably different results, MAJOR is a breaking change. The current version is in `vision/VERSION`.
 
 This repository is the public release of **1.21.1**. Earlier versions were developed privately; the entries below
-record what each one changed in the pipeline.
+record what each one changed in the pipeline. Work began on 2026-08-28, before releases had version numbers; that
+period is summarized at the end.
 
 ## 1.21.1 — 2026-11-01
 
@@ -190,3 +191,31 @@ record what each one changed in the pipeline.
 ## 1.0.0 — 2026-10-17
 
 - First versioned release: robot tracking and identity, and FUEL counting.
+
+## Before versioning (2026-08-28 to 2026-10-16)
+
+### October 2026 (to the 16th)
+
+- Gemini path: robot boxes from still frames and robot actions from video, drawn over the match video.
+- Automatic robot detection with a region of interest, rejection of balls on the ground, and a ballistic FUEL
+  tracker that fits 3D flights.
+- Pipeline review: faster camera registration, a batched robust ballistic fit, an exact identity solve, and fixes for
+  counting a ball twice.
+- Conflicting bumper identities are rejected, appearance matching keeps brightness, and autonomous motion is kept
+  separate from the scoring grace period.
+- Automatic ground-plane field calibration, once per event; video and model-answer caching, and parallel downloads.
+- Reading the broadcast scoreboard was tried briefly and later removed (see 1.1.0).
+
+### September 2026
+
+- The local vision-language model moved to a dense 27B Qwen model on a local GPU.
+- FUEL attribution fixed and camera tracking isolated per view.
+- A private, team-labelled training set for the robot detector.
+- Robot motion events and reviewed suggestions for scouts, plus a review and evaluation workflow.
+
+### August 2026 (from the 28th)
+
+- First pipeline: robot detection and re-identification, hybrid FUEL detection, and scoring attribution, with a local
+  vision-language model reviewing short clips.
+- Field calibration from the field's AprilTags, with gating, a recording preflight and a configurable tag family.
+- Robot identities constrained to the match roster.
