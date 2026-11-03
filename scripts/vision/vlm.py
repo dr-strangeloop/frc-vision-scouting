@@ -88,11 +88,9 @@ def to_gemini_schema(schema):
 
 
 def _ledger_file():
-    """Agent Tracker's usage ledger, when the tracker is installed: every Gemini call is added to its Cost today."""
-    if os.environ.get('AGENTTRACKER_LEDGER', '1') in ('0', 'false', 'no'):
-        return None
-    base = Path(os.environ.get('AGENTTRACKER_DIR') or Path.home() / 'Desktop' / 'agenttracker' / 'data')
-    return base / 'usage.jsonl' if base.is_dir() else None
+    """Optional usage log: set VISION_USAGE_LOG to a file path to append one line per Gemini call (off by default)."""
+    path = os.environ.get('VISION_USAGE_LOG')
+    return Path(path) if path else None
 
 
 def record_usage(model, tokens_in, tokens_out, cached=0):

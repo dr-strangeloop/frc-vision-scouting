@@ -28,34 +28,49 @@ scouting data as input.
 | `vision/qwen/` | Optional local Qwen vision-language service for bumper reads |
 | `src/lib/vision/data/rebuiltField.json` | 2026 field geometry (from the Game Manual and the WPILib AprilTag layout) |
 
-## Setup
+## Quick start
 
 ```bash
+git clone https://github.com/dr-strangeloop/frc-vision-scouting && cd frc-vision-scouting
 python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt          # add requirements-local.txt for your own detector
+cp .env.example .env                     # fill in GEMINI_API_KEY and/or TBA_API_KEY
+python3 vision.py check                  # tells you what is missing
 ```
 
-You also need `ffmpeg`, a **YOLO detector** trained to find robots (classes `robot_red` and `robot_blue`; no weights are
-included), and a **camera calibration** for the venue's broadcast view: a JSON file with `homography_norm` (normalized
-picture coordinates to field metres) and, for the HUB lights, a height projection.
+Or with Docker: `docker build -t frc-vision . && docker run --rm frc-vision check`.
 
-## Run a match
+You also need `ffmpeg` installed.
+
+### 1. Calibrate the venue (once per camera position)
 
 ```bash
-# local GPU detector and a local OpenAI-compatible VLM (LOCAL_VLM_URL)
-python3 scripts/vision/run_match.py --match 2026cc_qm1 --youtube <video id> --engine local \
-    --weights best.pt --calibration cal.json --out qm1.json
-
-# autonomous period only
-python3 scripts/vision/run_match.py --match 2026cc_qm1 --youtube <video id> --engine local \
-    --weights best.pt --calibration cal.json --auto-only --out qm1-auto.json
-
-# no GPU: Gemini for detection and reads (GEMINI_API_KEY)
-python3 scripts/vision/run_match.py --match 2026cc_qm1 --youtube <video id> --engine gemini \
-    --calibration cal.json --out qm1.json
+python3 vision.py calibrate --youtube <match video id> --out cal.json
 ```
 
-The roster comes from The Blue Alliance (`TBA_API_KEY`) or `--roster-json`. Run `--help` on each script for its options.
+It finds the broadcast's wide camera, calibrates from the HUB AprilTags (WPILib's layout is in `data/`), tunes the HUB
+light boxes and checks it can find the match start. Open `cal.preview.jpg`: the yellow outline should sit on the field
+and the pink boxes on the HUB lights. If the tags can't be read, mark landmarks by hand with
+`tools/calibration_marker.html` and build the file with `scripts/vision/build_calibration.py`.
+
+### 2. Choose how robots are detected
+
+- **Gemini** (`--engine gemini`): no GPU or detector needed. Set `GEMINI_API_KEY`; each run is billed by Google, capped
+  by `VISION_MAX_USD`.
+- **Your own YOLO detector** (`--engine local --weights your.pt`): train an Ultralytics YOLO model on broadcast frames
+  with two classes, `robot_red` and `robot_blue`. Runs free on your own GPU (or slowly on a CPU). Bumper reads use a
+  local vision-language model at `LOCAL_VLM_URL` if you have one.
+
+### 3. Run a match
+
+```bash
+python3 vision.py run --match 2026cc_qm1 --youtube <video id> --calibration cal.json --engine gemini --out qm1.json
+python3 vision.py run --match 2026cc_qm1 --youtube <video id> --calibration cal.json --engine local --weights your.pt --auto-only --out qm1-auto.json
+```
+
+Rosters come from The Blue Alliance (`TBA_API_KEY`) or `--roster-json '{"red":[...],"blue":[...]}'`. The result JSON
+has each robot's trajectory (field metres, match milliseconds), identities with confidence, and FUEL counts. Count
+FUEL on its own with `python3 vision.py fuel --help`.
 
 ## Notes
 

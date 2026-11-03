@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibration Marker</title>
+<!-- Local tool: mark field landmarks and HUB rim corners on a broadcast frame for build_calibration.py.
+     Nothing leaves this page; the frame is read from your disk and the marks are saved as a JSON download. -->
+<style>
+  :root { --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5b6470; --accent: #0b5cad; --done: #1a7f37; --line: #d0d7de; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #9da7b3; --accent: #4493f8; --done: #3fb950; --line: #30363d; } }
+  :root[data-theme="dark"] { --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #9da7b3; --accent: #4493f8; --done: #3fb950; --line: #30363d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 12px; }
+  main { position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  label { display: block; margin: 6px 0 2px; color: var(--muted); font-size: 12px; }
+  input[type=text], input[type=number] { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text); }
+  .group { margin-top: 12px; font-weight: 600; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+  .pt { display: flex; justify-content: space-between; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
+  .pt:hover { border-color: var(--line); }
+  .pt.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .pt .xy { color: var(--done); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pt .xy.none { color: var(--muted); }
+  button { padding: 6px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 4px; cursor: pointer; margin: 4px 4px 0 0; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0; }
+  #status { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.65); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh 55vh; } aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Calibration Marker</h1>
+  <p class="hint">Open a frame, pick a point in the list, then click it on the frame. Scroll to zoom, right-drag (or Shift-drag) to pan, ⌘/Ctrl-Z to undo. To move a mark, select it and click again. Mark every point you can see clearly; skip hidden ones. Needs at least 5 floor points spread across the field and 4 HUB rim corners.</p>
+  <label for="file">Frame (PNG or JPG, full resolution)</label>
+  <input id="file" type="file" accept="image/*">
+  <label for="frame">Frame name (match and video second)</label>
+  <input id="frame" type="text" placeholder="2026arc_qm5 @ 5s">
+  <label for="t">Frame time in the video (s)</label>
+  <input id="t" type="number" step="0.1" value="5">
+  <label for="who">Marked by</label>
+  <input id="who" type="text">
+  <div id="list"></div>
+  <div class="group">Region of interest (the wide field view)</div>
+  <div class="pt" data-id="roi:top-left"><span>ROI top-left corner</span><span class="xy none" id="xy-roi:top-left">–</span></div>
+  <div class="pt" data-id="roi:bottom-right"><span>ROI bottom-right corner</span><span class="xy none" id="xy-roi:bottom-right">–</span></div>
+  <div style="margin-top:10px">
+    <button id="undo">Undo (⌘/Ctrl-Z)</button>
+    <button id="clear">Clear selected</button>
+    <button class="primary" id="save">Save marks (JSON)</button>
+  </div>
+  <p class="hint" id="count"></p>
+</aside>
+<main>
+  <canvas id="c" aria-label="Frame to mark"></canvas>
+  <div id="status">Open a frame to start.</div>
+</main>
+<script>
+const LANDMARKS = [{"id": "corner-blue-right", "name": "Field corner: blue wall, blue-driver right", "group": "Field"}, {"id": "corner-blue-left", "name": "Field corner: blue wall, blue-driver left", "group": "Field"}, {"id": "corner-red-right", "name": "Field corner: red wall, red-driver right", "group": "Field"}, {"id": "corner-red-left", "name": "Field corner: red wall, red-driver left", "group": "Field"}, {"id": "center-line-right", "name": "Center line meets the guardrail (blue-driver right)", "group": "Lines"}, {"id": "center-line-left", "name": "Center line meets the guardrail (blue-driver left)", "group": "Lines"}, {"id": "blue-start-right", "name": "Blue starting line meets the guardrail (right)", "group": "Lines"}, {"id": "blue-start-left", "name": "Blue starting line meets the guardrail (left)", "group": "Lines"}, {"id": "red-start-right", "name": "Red starting line meets the guardrail (blue-driver right)", "group": "Lines"}, {"id": "red-start-left", "name": "Red starting line meets the guardrail (blue-driver left)", "group": "Lines"}, {"id": "blue-hub-wall-left", "name": "Blue hub base: wall side, left", "group": "Blue hub"}, {"id": "blue-hub-wall-right", "name": "Blue hub base: wall side, right", "group": "Blue hub"}, {"id": "blue-hub-center-left", "name": "Blue hub base: center side, left", "group": "Blue hub"}, {"id": "blue-hub-center-right", "name": "Blue hub base: center side, right", "group": "Blue hub"}, {"id": "red-hub-wall-left", "name": "Red hub base: wall side, left", "group": "Red hub"}, {"id": "red-hub-wall-right", "name": "Red hub base: wall side, right", "group": "Red hub"}, {"id": "red-hub-center-left", "name": "Red hub base: center side, left", "group": "Red hub"}, {"id": "red-hub-center-right", "name": "Red hub base: center side, right", "group": "Red hub"}, {"id": "blue-tower-left", "name": "Blue tower base: front, left", "group": "Towers"}, {"id": "blue-tower-right", "name": "Blue tower base: front, right", "group": "Towers"}, {"id": "red-tower-left", "name": "Red tower base: front, left", "group": "Towers"}, {"id": "red-tower-right", "name": "Red tower base: front, right", "group": "Towers"}, {"id": "rim:blue-hub-wall-left", "name": "Rim corner above: Blue hub: wall side, left (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:blue-hub-wall-right", "name": "Rim corner above: Blue hub: wall side, right (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:blue-hub-center-left", "name": "Rim corner above: Blue hub: center side, left (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:blue-hub-center-right", "name": "Rim corner above: Blue hub: center side, right (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:red-hub-wall-left", "name": "Rim corner above: Red hub: wall side, left (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:red-hub-wall-right", "name": "Rim corner above: Red hub: wall side, right (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:red-hub-center-left", "name": "Rim corner above: Red hub: center side, left (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}, {"id": "rim:red-hub-center-right", "name": "Rim corner above: Red hub: center side, right (top of the face, 1.83 m)", "group": "HUB rims (1.83 m)"}];
+const marks = {};
+const history = [];   // [point id, previous mark or undefined] for Ctrl/Cmd-Z
+let selected = null, img = null, view = { s: 1, x: 0, y: 0 }, drag = null;
+const list = document.getElementById('list'), canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+let lastGroup = null;
+for (const lm of LANDMARKS) {
+  if (lm.group !== lastGroup) { const g = document.createElement('div'); g.className = 'group'; g.textContent = lm.group; list.appendChild(g); lastGroup = lm.group; }
+  const row = document.createElement('div'); row.className = 'pt'; row.dataset.id = lm.id;
+  row.innerHTML = '<span></span><span class="xy none">–</span>';
+  row.firstChild.textContent = lm.name; row.lastChild.id = 'xy-' + lm.id;
+  list.appendChild(row);
+}
+document.querySelectorAll('.pt').forEach((row) => row.addEventListener('click', () => select(row.dataset.id)));
+function select(id) {
+  selected = id;
+  document.querySelectorAll('.pt').forEach((r) => r.classList.toggle('sel', r.dataset.id === id));
+  statusEl.textContent = 'Click: ' + (LANDMARKS.find((l) => l.id === id)?.name || id);
+}
+function nextUnmarked() {
+  const ids = [...document.querySelectorAll('.pt')].map((r) => r.dataset.id);
+  const i = ids.indexOf(selected);
+  for (let k = 1; k <= ids.length; k++) { const id = ids[(i + k) % ids.length]; if (!marks[id]) return select(id); }
+}
+function refresh() {
+  for (const row of document.querySelectorAll('.pt')) {
+    const el = row.querySelector('.xy'); const m = marks[row.dataset.id];
+    el.textContent = m ? m[0].toFixed(1) + ', ' + m[1].toFixed(1) : '–'; el.classList.toggle('none', !m);
+  }
+  const floor = Object.keys(marks).filter((k) => !k.startsWith('rim:') && !k.startsWith('roi:')).length;
+  const rims = Object.keys(marks).filter((k) => k.startsWith('rim:')).length;
+  document.getElementById('count').textContent = floor + ' floor points, ' + rims + ' rim corners marked.';
+  draw();
+}
+function resize() { canvas.width = canvas.clientWidth * devicePixelRatio; canvas.height = canvas.clientHeight * devicePixelRatio; draw(); }
+function fit() { if (!img) return; const s = Math.min(canvas.width / img.width, canvas.height / img.height); view = { s, x: (canvas.width - img.width * s) / 2, y: (canvas.height - img.height * s) / 2 }; draw(); }
+function toImage(e) { const r = canvas.getBoundingClientRect(); const cx = (e.clientX - r.left) * devicePixelRatio, cy = (e.clientY - r.top) * devicePixelRatio; return [(cx - view.x) / view.s, (cy - view.y) / view.s, cx, cy]; }
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!img) return;
+  ctx.imageSmoothingEnabled = view.s < 2;
+  ctx.setTransform(view.s, 0, 0, view.s, view.x, view.y); ctx.drawImage(img, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const [id, [u, v]] of Object.entries(marks)) {
+    const x = view.x + u * view.s, y = view.y + v * view.s;
+    ctx.strokeStyle = id === selected ? '#ff0' : id.startsWith('rim:') ? '#f0f' : '#0f0'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 8, y); ctx.lineTo(x + 8, y); ctx.moveTo(x, y - 8); ctx.lineTo(x, y + 8); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = (12 * devicePixelRatio) + 'px sans-serif'; ctx.fillText(id.replace('rim:', '^'), x + 6, y - 6);
+  }
+  const a = marks['roi:top-left'], b = marks['roi:bottom-right'];
+  if (a && b) { ctx.strokeStyle = '#0af'; ctx.setLineDash([6, 4]); ctx.strokeRect(view.x + a[0] * view.s, view.y + a[1] * view.s, (b[0] - a[0]) * view.s, (b[1] - a[1]) * view.s); ctx.setLineDash([]); }
+}
+document.getElementById('file').addEventListener('change', (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const url = URL.createObjectURL(f); const im = new Image();
+  im.onload = () => { img = im; if (!document.getElementById('frame').value) document.getElementById('frame').value = f.name; fit(); select(LANDMARKS[0].id); };
+  im.src = url;
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); const [, , cx, cy] = toImage(e); const k = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+  view.x = cx - (cx - view.x) * k; view.y = cy - (cy - view.y) * k; view.s *= k; draw();
+}, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('mousedown', (e) => { if (e.button === 2 || e.shiftKey) drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; });
+addEventListener('mousemove', (e) => { if (!drag) return; view.x = drag.vx + (e.clientX - drag.x) * devicePixelRatio; view.y = drag.vy + (e.clientY - drag.y) * devicePixelRatio; draw(); });
+addEventListener('mouseup', (e) => {
+  if (drag) { const moved = Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3; drag = null; if (moved || e.button === 2) return; }
+  if (e.target !== canvas || e.button !== 0 || !img || !selected) return;
+  const [u, v] = toImage(e); if (u < 0 || v < 0 || u > img.width || v > img.height) return;
+  history.push([selected, marks[selected]]);
+  marks[selected] = [Math.round(u * 10) / 10, Math.round(v * 10) / 10]; refresh(); nextUnmarked();
+});
+document.getElementById('clear').addEventListener('click', () => { if (selected && marks[selected]) { history.push([selected, marks[selected]]); delete marks[selected]; refresh(); } });
+function undo() {
+  const last = history.pop(); if (!last) return;
+  const [id, previous] = last;
+  if (previous) marks[id] = previous; else delete marks[id];
+  select(id); refresh();
+}
+document.getElementById('undo').addEventListener('click', undo);
+addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && e.target.tagName !== 'INPUT') { e.preventDefault(); undo(); }
+});
+document.getElementById('save').addEventListener('click', () => {
+  if (!img) return;
+  const points = {}; for (const [k, v] of Object.entries(marks)) if (!k.startsWith('roi:')) points[k] = v;
+  const a = marks['roi:top-left'], b = marks['roi:bottom-right'];
+  const out = { width: img.width, height: img.height, frame: document.getElementById('frame').value,
+    frame_t_s: Number(document.getElementById('t').value) || 0, marked_by: document.getElementById('who').value, points,
+    roi: a && b ? [a[0] / img.width, a[1] / img.height, b[0] / img.width, b[1] / img.height].map((x) => Math.round(x * 1e4) / 1e4) : null };
+  const blob = new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' });
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+  link.download = (out.frame || 'frame').replace(/[^A-Za-z0-9_.-]+/g, '_') + '.marks.json'; link.click();
+});
+addEventListener('resize', resize); resize(); refresh();
+</script>
+</body>
+</html>

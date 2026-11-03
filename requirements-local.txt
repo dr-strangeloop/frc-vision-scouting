@@ -1,0 +1,4 @@
+# Add these to run your own YOLO robot detector (--engine local --weights your.pt)
+-r requirements.txt
+ultralytics>=8.3
+lap>=0.5.13
